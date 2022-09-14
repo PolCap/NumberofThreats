@@ -1,0 +1,304 @@
+# --------------------------------------------------------------------------------------- #
+# - FILE NAME:   Models.R         
+# - DATE:        20/07/2021
+# - DESCRIPTION: Fit bayesian models predicting number of stressors. 
+# - AUTHORS:     Pol Capdevila Lanzaco (pcapdevila.pc@gmail.com)
+# --------------------------------------------------------------------------------------- #
+
+rm(list=ls(all=TRUE)) #remove everything
+
+library(tidyverse)
+library(brms)
+library(data.table)
+library(ape)
+library(geiger)
+library(zoo)
+library(dplyr)
+library(expss)
+
+# Set working directory
+
+path <- gsub("Code", "", dirname(rstudioapi::getActiveDocumentContext()$path))
+
+CodePath <- paste0(path,"Code")
+DataPath <-  paste0(path,"Data")
+ResultPath <-  paste0(path, "Results") 
+
+# Load data 
+
+load(paste0(DataPath, "/LPIData.RData"))
+
+# Create a new variable for species names 
+
+lpi <- lpi %>% mutate(animal=SpeciesName)
+
+# Separate the data for Class and system for the models 
+
+mam_ter <- lpi %>% filter(Class=="Mammals"&System=="Terrestrial")
+mam_mar <- lpi %>% filter(Class=="Mammals"&System=="Marine")
+mam_fres <- lpi %>% filter(Class=="Mammals"&System=="Freshwater")
+bird_ter <- lpi %>% filter(Class=="Birds"&System=="Terrestrial")
+bird_mar <- lpi %>% filter(Class=="Birds"&System=="Marine")
+bird_fres <- lpi %>% filter(Class=="Birds"&System=="Freshwater")
+amp_ter <- lpi %>% filter(Class=="Amphibians"&System=="Terrestrial")
+amp_fres <- lpi %>% filter(Class=="Amphibians"&System=="Freshwater")
+rep_ter <- lpi %>% filter(Class=="Reptiles"&System=="Terrestrial")
+rep_mar <- lpi %>% filter(Class=="Reptiles"&System=="Marine")
+rep_fres <- lpi %>% filter(Class=="Reptiles"&System=="Freshwater")
+fish_mar <- lpi %>% filter(Class=="Bony Fish"&System=="Marine")
+fish_fres <- lpi %>% filter(Class=="Bony Fish"&System=="Freshwater")
+car_mar <- lpi %>% filter(Class=="Cartilaginous Fish"&System=="Marine")
+
+# Phylogenies 
+
+setwd(DataPath)
+amp_tree <- read.nexus("amphibians.nex")[[1]]
+bird_tree <- read.nexus("birds.nex")[[1]]
+mam_tree <- read.nexus("mammals.nex")[[1]]
+rep_tree <- read.nexus("reptiles.nex")[[1]]
+fish_tree <- read.tree("PhyloFish.tre")
+car_tree <- read.tree("PhyloShark.tre")
+
+# Subset the data matching the trees 
+# Terrestrial mammals 
+
+sp <- unique(mam_ter$SpeciesName)
+names(sp) <- unique(mam_ter$SpeciesName)
+mam_tree$tip.label <- gsub("_", " ", mam_tree$tip.label)
+(chk<- name.check(mam_tree, sp))
+mam_tree_ter <- drop.tip(mam_tree, chk$tree_not_data)
+mam_ter <- mam_ter[mam_ter$SpeciesName%in%mam_tree_ter$tip.label,]
+amt <- vcv.phylo(mam_tree_ter)
+
+# Marine mammals 
+
+sp <- unique(mam_mar$SpeciesName)
+names(sp) <- unique(mam_mar$SpeciesName)
+mam_tree$tip.label <- gsub("_", " ", mam_tree$tip.label)
+(chk<- name.check(mam_tree, sp))
+mam_tree_mar <- drop.tip(mam_tree, chk$tree_not_data)
+mam_mar <- mam_mar[mam_mar$SpeciesName%in%mam_tree_mar$tip.label,]
+amm <- vcv.phylo(mam_tree_mar)
+
+# Freshwater mammals 
+
+sp <- unique(mam_fres$SpeciesName)
+names(sp) <- unique(mam_fres$SpeciesName)
+mam_tree$tip.label <- gsub("_", " ", mam_tree$tip.label)
+(chk<- name.check(mam_tree, sp))
+mam_tree_fres <- drop.tip(mam_tree, chk$tree_not_data)
+mam_fres <- mam_fres[mam_fres$SpeciesName%in%mam_tree_fres$tip.label,]
+amf <- vcv.phylo(mam_tree_fres)
+
+# Terrestrial birds 
+
+sp <- unique(bird_ter$SpeciesName)
+names(sp) <- unique(bird_ter$SpeciesName)
+bird_tree$tip.label <- gsub("_", " ", bird_tree$tip.label)
+(chk<- name.check(bird_tree, sp))
+bird_tree_ter <- drop.tip(bird_tree, chk$tree_not_data)
+bird_ter <- bird_ter[bird_ter$SpeciesName%in%bird_tree_ter$tip.label,]
+abt <- vcv.phylo(bird_tree_ter)
+
+# Marine birds
+
+sp <- unique(bird_mar$SpeciesName)
+names(sp) <- unique(bird_mar$SpeciesName)
+bird_tree$tip.label <- gsub("_", " ", bird_tree$tip.label)
+(chk<- name.check(bird_tree, sp))
+bird_tree_mar <- drop.tip(bird_tree, chk$tree_not_data)
+bird_mar <- bird_mar[bird_mar$SpeciesName%in%bird_tree_mar$tip.label,]
+abm <- vcv.phylo(bird_tree_mar)
+
+# Freshwater mammals 
+
+sp <- unique(bird_fres$SpeciesName)
+names(sp) <- unique(bird_fres$SpeciesName)
+bird_tree$tip.label <- gsub("_", " ", bird_tree$tip.label)
+(chk<- name.check(bird_tree, sp))
+bird_tree_fres <- drop.tip(bird_tree, chk$tree_not_data)
+bird_fres <- bird_fres[bird_fres$SpeciesName%in%bird_tree_fres$tip.label,]
+abf <- vcv.phylo(bird_tree_fres)
+
+# Terrestrial amphibians 
+
+sp <- unique(amp_ter$SpeciesName)
+names(sp) <- unique(amp_ter$SpeciesName)
+amp_tree$tip.label <- gsub("_", " ", amp_tree$tip.label)
+(chk<- name.check(amp_tree, sp))
+amp_tree_ter <- drop.tip(amp_tree, chk$tree_not_data)
+amp_ter <- amp_ter[amp_ter$SpeciesName%in%amp_tree_ter$tip.label,]
+aat <- vcv.phylo(amp_tree_ter)
+
+# Freshwater amphibians
+
+sp <- unique(amp_fres$SpeciesName)
+names(sp) <- unique(amp_fres$SpeciesName)
+amp_tree$tip.label <- gsub("_", " ", amp_tree$tip.label)
+(chk<- name.check(amp_tree, sp))
+amp_tree_fres <- drop.tip(amp_tree, chk$tree_not_data)
+amp_fres <- amp_fres[amp_fres$SpeciesName%in%amp_tree_fres$tip.label,]
+aaf <- vcv.phylo(amp_tree_fres)
+
+# Terrestrial reptiles
+
+sp <- unique(rep_ter$SpeciesName)
+names(sp) <- unique(rep_ter$SpeciesName)
+rep_tree$tip.label <- gsub("_", " ", rep_tree$tip.label)
+(chk<- name.check(rep_tree, sp))
+rep_tree_ter <- drop.tip(rep_tree, chk$tree_not_data)
+rep_ter <- rep_ter[rep_ter$SpeciesName%in%rep_tree_ter$tip.label,]
+art <- vcv.phylo(rep_tree_ter)
+
+# Freshwater reptiles
+
+sp <- unique(rep_fres$SpeciesName)
+names(sp) <- unique(rep_fres$SpeciesName)
+rep_tree$tip.label <- gsub("_", " ", rep_tree$tip.label)
+(chk<- name.check(rep_tree, sp))
+rep_tree_fres <- drop.tip(rep_tree, chk$tree_not_data)
+rep_fres <- rep_fres[rep_fres$SpeciesName%in%rep_tree_fres$tip.label,]
+arf <- vcv.phylo(rep_tree_fres)
+
+# Terrestrial reptiles
+
+sp <- unique(rep_ter$SpeciesName)
+names(sp) <- unique(rep_ter$SpeciesName)
+rep_tree$tip.label <- gsub("_", " ", rep_tree$tip.label)
+(chk<- name.check(rep_tree, sp))
+rep_tree_ter <- drop.tip(rep_tree, chk$tree_not_data)
+rep_ter <- rep_ter[rep_ter$SpeciesName%in%rep_tree_ter$tip.label,]
+art <- vcv.phylo(rep_tree_ter)
+
+# Marine reptiles
+
+sp <- unique(rep_mar$SpeciesName)
+names(sp) <- unique(rep_mar$SpeciesName)
+rep_tree$tip.label <- gsub("_", " ", rep_tree$tip.label)
+(chk<- name.check(rep_tree, sp))
+rep_tree_mar <- drop.tip(rep_tree, chk$tree_not_data)
+rep_mar <- rep_mar[rep_mar$SpeciesName%in%rep_tree_mar$tip.label,]
+arm <- vcv.phylo(rep_tree_mar)
+
+# Marine fish
+
+sp <- unique(fish_mar$SpeciesName)
+names(sp) <- unique(fish_mar$SpeciesName)
+fish_tree$tip.label <- gsub("_", " ", fish_tree$tip.label)
+(chk<- name.check(fish_tree, sp))
+fish_tree_mar <- drop.tip(fish_tree, chk$tree_not_data)
+fish_mar <- fish_mar[fish_mar$SpeciesName%in%fish_tree_mar$tip.label,]
+afm <- vcv.phylo(fish_tree_mar)
+
+# Freshwater fish
+
+sp <- unique(fish_fres$SpeciesName)
+names(sp) <- unique(fish_fres$SpeciesName)
+fish_tree$tip.label <- gsub("_", " ", fish_tree$tip.label)
+(chk<- name.check(fish_tree, sp))
+fish_tree_fres <- drop.tip(fish_tree, chk$tree_not_data)
+fish_fres <- fish_fres[fish_fres$SpeciesName%in%fish_tree_fres$tip.label,]
+aff <- vcv.phylo(fish_tree_fres)
+
+# Marine sharks
+
+sp <- unique(car_mar$SpeciesName)
+names(sp) <- unique(car_mar$SpeciesName)
+car_tree$tip.label <- gsub("_", " ", car_tree$tip.label)
+(chk<- name.check(car_tree, sp))
+car_tree_mar <- drop.tip(car_tree, chk$tree_not_data)
+car_mar <- car_mar[car_mar$SpeciesName%in%car_tree_mar$tip.label,]
+acm <- vcv.phylo(car_tree_mar)
+
+# Set modelling parameters #####################################################
+
+iter <- 10000
+thin <- 0.0005*iter
+warmup <- 0.1*iter
+
+# Set weakly informed prior
+
+prior <- c(prior(exponential(1), class = sigma))
+
+# Fit models with no fixed effects 
+
+ps_mam_ter <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                  iter = iter, thin = thin, warmup = warmup,
+                  prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                  data = mam_ter,data2 = list(A = amt), cores=20)
+ps_mam_mar <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                  iter = iter, thin = thin, warmup = warmup,
+                  prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                  data = mam_mar,data2 = list(A = amm), cores=20)
+ps_mam_fre <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                  iter = iter, thin = thin, warmup = warmup,
+                  prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                  data = mam_fres,data2 = list(A = amf), cores=20)
+ps_bird_ter <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                   iter = iter, thin = thin, warmup = warmup,
+                   prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                   data = bird_ter, data2 = list(A = abt), cores=20)
+ps_bird_mar <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                   iter = iter, thin = thin, warmup = warmup,
+                   prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                   data = bird_mar, data2 = list(A = abm), cores=20)
+ps_bird_fre <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                   iter = iter, thin = thin, warmup = warmup,
+                   prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                   data = bird_fres, data2 = list(A = abf), cores=20)
+ps_rep_ter <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                  iter = iter, thin = thin, warmup = warmup,
+                  prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                  data = rep_ter, data2 = list(A = art), cores=20)
+ps_rep_mar <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                  iter = iter, thin = thin, warmup = warmup,
+                  prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                  data = rep_mar, data2 = list(A = arm), cores=20)
+ps_rep_fre <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                  iter = iter, thin = thin, warmup = warmup,
+                  prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                  data = rep_fres, data2 = list(A = arf), cores=20)
+ps_amp_ter <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                  iter = iter, thin = thin, warmup = warmup,
+                  prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                  data = amp_ter, data2 = list(A = aat), cores=20)
+ps_amp_fre <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                  iter = iter, thin = thin, warmup = warmup,
+                  prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                  data = amp_fres, data2 = list(A = aaf), cores=20)
+ps_fish_mar <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                   iter = iter, thin = thin, warmup = warmup,
+                   prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                   data = fish_mar, data2 = list(A = afm), cores=20)
+ps_fish_fre <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                   iter = iter, thin = thin, warmup = warmup,
+                   prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                   data = fish_fres, data2 = list(A = aff), cores=20)
+ps_car_mar <- brm(n.threat~1+(1|SpeciesName)+ (1|gr(animal, cov = A)),
+                  iter = iter, thin = thin, warmup = warmup,
+                  prior= prior, control = list(adapt_delta = .975, max_treedepth = 20),
+                  data = car_mar, data2 = list(A = acm), cores=20)
+
+# Now we measure the phylogenetic signal for all the models 
+
+hyp <-  paste("sd_animal__Intercept^2 /", 
+              "(sd_animal__Intercept^2 + sd_SpeciesName__Intercept^2 + sigma^2) = 0")
+
+(psign_mam_ter <- hypothesis(ps_mam_ter, hyp, class = NULL))
+(psign_mam_mar <- hypothesis(ps_mam_mar, hyp, class = NULL))
+(psign_mam_fre <- hypothesis(ps_mam_fre, hyp, class = NULL))
+(psign_bird_ter <- hypothesis(ps_bird_ter, hyp, class = NULL))
+(psign_bird_mar <- hypothesis(ps_bird_mar, hyp, class = NULL))
+(psign_bird_fre <- hypothesis(ps_bird_fre, hyp, class = NULL))
+(psign_amp_ter <- hypothesis(ps_amp_ter, hyp, class = NULL))
+(psign_amp_fre <- hypothesis(ps_amp_fre, hyp, class = NULL))
+(psign_rep_ter <- hypothesis(ps_rep_ter, hyp, class = NULL))
+(psign_rep_fre <- hypothesis(ps_rep_fre, hyp, class = NULL))
+(psign_fish_mar <- hypothesis(ps_fish_mar, hyp, class = NULL))
+(psign_fish_fre <- hypothesis(ps_fish_fre, hyp, class = NULL))
+(psign_car_mar <- hypothesis(ps_car_mar, hyp, class = NULL))
+
+# Save the results -------------------------------------------------------------
+
+setwd(ResultPath)
+save.image(file="PSModels.RData")
