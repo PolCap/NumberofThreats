@@ -39,8 +39,7 @@ To run the statistical analyses we used different R scripts:
 
 - __`Models.R`__: code to analyse the factors influencing the number of threats at which a population is exposed to.
 - __`Figures.R`__: code to create the figures and tables of the study. 
-- __`SupResults.R`__: code to do the supplementary analyses. 
-- __`SupFigs.R`__: code to represent the supplementary figures. 
+- __`SupFigs.R`__: code to represent the supplementary results and figures. 
 - __`PhyloSignal.R`__: code to analyse the phylogenetic signal of the number of threats. 
 
 ---
