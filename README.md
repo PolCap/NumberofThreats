@@ -28,7 +28,8 @@ _The interactive effects of multiple threats are one of the main causes of biodi
 - __`birds.nex`__: phylogeny of amphibians obtained from [vertlife.org](https://vertlife.org/).  
 - __`mammals.nex`__: phylogeny of amphibians obtained from [vertlife.org](https://vertlife.org/).
 - __`reptiles.nex`__: phylogeny of amphibians obtained from [vertlife.org](https://vertlife.org/).
-- __`fishtree.tre`__: phylogeny of fishes obtained from [Rabosky et al. 2014](https://www.nature.com/articles/s41586-018-0273-1).
+- __`PhyloFish.tre`__: phylogeny of fishes obtained from [Hinchliff et al. 2015](https://www.pnas.org/doi/abs/10.1073/pnas.1423041112).
+- __`PhyloShark.tre`__: phylogeny of elasmobarnchi obtained from [Hinchliff et al. 2015](https://www.pnas.org/doi/abs/10.1073/pnas.1423041112).
 - __`PopDensity.csv`__: human density data obtained from [Hurtt et al. 2011](https://link.springer.com/article/10.1007/s10584-011-0153-2).
 
 ---
